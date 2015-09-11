@@ -1,35 +1,32 @@
 {
-  "name": "OpenShift-Sample-App",
-  "version": "1.0.0",
-  "description": "OpenShift Sample Application",
-  "keywords": [
-    "OpenShift",
-    "Node.js",
-    "application",
-    "openshift"
-  ],
-  "author": {
-    "name": "OpenShift",
-    "email": "ramr@example.org",
-    "url": "http://www.openshift.com/"
-  },
-  "homepage": "http://www.openshift.com/",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/openshift/origin-server"
-  },
-
+  "name": "dockerhubui",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Dockerhub UI",
+  "author": "Saulo Aflitos <sauloal@gmail.com>",
+  "main": "index.js",
+  "single-instance": true,
+  "scripts": {"start": "nodemon index.js"},
+  "license": "MIT",
   "engines": {
     "node": ">= 0.6.0",
     "npm": ">= 1.0.0"
   },
-
   "dependencies": {
-    "express": "~3.4.4"
-  },
-  "devDependencies": {},
-  "bundleDependencies": [],
-
-  "private": true,
-  "main": "server.js"
+    "body-parser": "*",
+    "cookie-parser": "*",
+    "cookie-session": "*",
+    "compression": "*",
+    "checksum": "*",
+    "debug": "*",
+    "errorhandler": "*",
+    "express": "*",
+    "method-override": "*",
+    "nodemon": "*",
+    "node-persist": "*",
+    "request": "*",
+    "time": "*",
+    "serve-favicon": "*",
+    "serve-static": "*"
+  }
 }
