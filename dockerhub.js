@@ -1,5 +1,6 @@
-var request = require( 'request' );
-//var time    = require( 'time'    );
+var request = require( 'request'    );
+var cache   = require( './cache.js' );
+var logger  = require('./logger.js' );
 
 /*
  * WEB HUB API
@@ -9,87 +10,61 @@ var request = require( 'request' );
 //https://hub.docker.com/v2/repositories/sauloal/lamp/buildhistory/
 //https://hub.docker.com/v2/repositories/sauloal/lamp/buildhistory/bmotlodzftpxygxsdx4wxjc/
 
+var CACHE_TIMEOUT_MINUTES = process.env.CACHE_TIMEOUT_MINUTES || 1440; //60 = 1h 1440 = 1 day
+var CACHE_TIMEOUT         = CACHE_TIMEOUT_MINUTES * 1000 * 60;
 
-
-var caches = {
-    "repos": {},
-    "info" : {},
-    "histo": {},
-    "logs" : {}
-};
-
-var CACHE_TIMEOUT_SECS = process.env.CACHE_TIMEOUT_SECS || 6000; //60 = 1 min 600 = 10 min 6000 1h
-var CACHE_TIMEOUT      = CACHE_TIMEOUT_SECS * 1000;
-
-function clean_cache() {
-    for ( var c in caches ) {
-        console.log("cleaning cache", c);
-        caches[c] = {};
-    }
-}
-
-function check_cache(key, type) {
-    if (CACHE_TIMEOUT == 0){
-        return null;
-    }
-    
-    var ch   = caches[type];
-    var now  = (new Date()).getTime();
-    
-    if ( key in ch ) {
-        var ctm  = ch[key][0];
-        var val  = ch[key][1];
-        var diff = now - ctm;
-
-        if ( diff < CACHE_TIMEOUT ) {
-            console.log("found cache", 'key', key, 'type', type, 'ctm', ctm, 'now', now, 'timeout', CACHE_TIMEOUT, 'diff', diff);
-            return val;
-        
-        } else {
-            console.log("cache timedout", key, type, 'ctm', ctm, 'now', now, 'timeout', CACHE_TIMEOUT, 'diff', diff);
-            return null;
-
-        }
-    } else {
-        console.log("missed cache", key, type, 'ctm', ctm, 'now', now, 'timeout', CACHE_TIMEOUT, 'diff', diff);
-        return null;
-        
-    }
-}
+var cacher = new cache.cache(CACHE_TIMEOUT);
 
 
 function get_repos(username, no_cache, clbk) {
+    logger('dockerhub.get_repos: username', username, 'no_cache', no_cache);
     var cache_name = 'repos';
+    var cache_key  = username;
+    var func       = get_repos;
     if (!no_cache) {
-        var val = check_cache(username, cache_name);
-        if ( val ) {
-            clbk(val);
-            return;
-        }
+        cacher.get(cache_name, cache_key, 
+            function(val) {
+                if ( val ) {
+                    clbk( true, val );
+                    return;
+
+                } else {
+                    func(username, true, clbk);
+                    return;
+
+                }
+            }
+        );
+        return;
     }
 
     request.get({"url": "https://hub.docker.com/v2/repositories/"+username+"/?page_size=1000", "json": true},
-        function name(error, response, repos) {
+        function (error, response, data) {
             if (error) {
-                console.log("error getting repos", error, repos);
-                clbk(null);
+                logger('dockerhub.get_repos: username', username, 'no_cache', no_cache, "error getting repos", error, data);
+                clbk( false, null );
                 return;
             }
+            
             if (response.headers['content-type'] != "application/json") {
-                console.log("error getting repos. wrong type", response.headers['content-type'], repos, response.request.uri.path);
-                clbk(null);
+                logger('dockerhub.get_repos: username', username, 'no_cache', no_cache, "error getting repos. wrong type", response.headers['content-type'], data, response.request.uri.path);
+                clbk( false, null );
                 return;
             }
-            //console.log("success getting repos", response.request.uri.path, repos);
-            console.log("success getting repos", response.request.uri.path);
-            //console.log("success getting repos", response.headers);
+            
+            //logger("success getting repos", response.request.uri.path, repos);
+            logger('dockerhub.get_repos: username', username, 'no_cache', no_cache, "success getting repos", response.request.uri.path);
+            //logger("success getting repos", response.headers);
 
             //{"next": "https://hub.docker.com/v2/repositories/sauloal/?page=2", "previous": null, "results": [{"user": "sauloal", "name": "kivy", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": false, "can_edit": false, "star_count": 0, "pull_count": 38, "last_updated": "2014-04-23T16:54:03Z"}, {"user": "sauloal", "name": "gateone", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": true, "can_edit": false, "star_count": 0, "pull_count": 12, "last_updated": "2014-09-10T22:17:30.239514Z"}, {"user": "sauloal", "name": "ajenti", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": true, "can_edit": false, "star_count": 0, "pull_count": 50, "last_updated": "2014-09-12T22:27:59.454820Z"}, {"user": "sauloal", "name": "shipyard", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": false, "can_edit": false, "star_count": 0, "pull_count": 18, "last_updated": "2014-07-08T21:26:50Z"}, {"user": "sauloal", "name": "shipyardauto", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": true, "can_edit": false, "star_count": 0, "pull_count": 14, "last_updated": "2014-07-08T21:48:06Z"}, {"user": "sauloal", "name": "supervisor", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": true, "can_edit": false, "star_count": 0, "pull_count": 19, "last_updated": "2014-07-08T22:22:31Z"}, {"user": "sauloal", "name": "allbio", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": true, "can_edit": false, "star_count": 0, "pull_count": 10, "last_updated": "2014-07-08T23:09:50Z"}, {"user": "sauloal", "name": "mongo", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": true, "can_edit": false, "star_count": 0, "pull_count": 18, "last_updated": "2014-07-08T22:53:45Z"}, {"user": "sauloal", "name": "mongoapi", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": true, "can_edit": false, "star_count": 0, "pull_count": 24, "last_updated": "2014-07-08T23:15:43Z"}, {"user": "sauloal", "name": "mongoapistats", "namespace": "sauloal", "status": 1, "description": "", "is_private": false, "is_automated": true, "can_edit": false, "star_count": 0, "pull_count": 18, "last_updated": "2014-07-13T14:53:49Z"}]}
             
-            var cache_time = (new Date()).getTime();
-            caches[cache_name][username] = [cache_time, repos];
-            repos.cache_time = cache_time;
-            clbk(repos);
+            data.cache_time = (new Date()).getTime();
+            cacher.set(cache_name, cache_key, data, function(err) {
+                logger('dockerhub.get_repos: username', username, 'no_cache', no_cache, "saved to cache. err:", err);
+                if (err) {
+                }
+                clbk( false, data );
+            });
         }
     );
 }
@@ -97,34 +72,49 @@ function get_repos(username, no_cache, clbk) {
 
 function get_repo_info(repo_name, no_cache, clbk) {
     var cache_name = 'info';
+    var cache_key  = repo_name;
+    var func       = get_repo_info;
     if (!no_cache) {
-        var val = check_cache(repo_name, cache_name);
-        if ( val ) {
-            clbk(val);
-            return;
-        }
+        cacher.get(cache_name, cache_key, 
+            function(val) {
+                if ( val ) {
+                    clbk( true, val );
+                    return;
+
+                } else {
+                    func(repo_name, true, clbk);
+                    return;
+
+                }
+            }
+        );
+        return;
     }
+
     
     request.get({"url": "https://hub.docker.com/v2/repositories/"+repo_name+"/?page_size=1000", "json": true},
-        function name(error, response, build_info) {
+        function name(error, response, data) {
             if (error) {
-                console.log("error getting build info", error, build_info);
-                clbk(null);
+                logger("error getting build info", error, data);
+                clbk( false, null );
                 return;
             }
-            if (response.headers['content-type'] != "application/json") {
-                console.log("error getting build info. wrong type", response.headers['content-type'], response.request.uri.path, build_info);
-                clbk(null);
-                return;
-            }
-            console.log("success getting build info", response.request.uri.path);
-            //console.log("success getting build info", response.headers);
-
-            var cache_time = (new Date()).getTime();
-            caches[cache_name][repo_name] = [cache_time, build_info];
-            build_info.cache_time = cache_time;
             
-            clbk( build_info );
+            if (response.headers['content-type'] != "application/json") {
+                logger("error getting build info. wrong type", response.headers['content-type'], response.request.uri.path, data);
+                clbk( false, null );
+                return;
+            }
+            
+            logger("success getting build info", response.request.uri.path);
+            //logger("success getting build info", response.headers);
+
+            data.cache_time = (new Date()).getTime();
+            cacher.set(cache_name, cache_key, data, function(err) {
+                if (err) {
+                }
+                clbk( false, data );
+            });
 
             // { user: 'sauloal',
             //	name: 'introgressionbrowser',
@@ -146,35 +136,49 @@ function get_repo_info(repo_name, no_cache, clbk) {
 
 function get_build_history(repo_name, no_cache, clbk) {
     var cache_name = 'histo';
+    var cache_key  = repo_name;
+    var func       = get_build_history;
     if (!no_cache) {
-        var val = check_cache(repo_name, cache_name);
-        if ( val ) {
-            clbk(val);
-            return;
-        }
+        cacher.get(cache_name, cache_key, 
+            function(val) {
+                if ( val ) {
+                    clbk( true, val );
+                    return;
+
+                } else {
+                    func(repo_name, true, clbk);
+                    return;
+                    
+                }
+            }
+        );
+        return;
     }
     
     request.get({"url": "https://hub.docker.com/v2/repositories/"+repo_name+"/buildhistory/?page_size=1000", "json": true},
-        function (error, response, build_history) {
+        function (error, response, data) {
             if (error) {
-                console.log("error getting build history", error, build_history);
-                clbk(null);
+                logger("error getting build history", error, data);
+                clbk( false, null );
                 return;
             }
+            
             if (response.headers['content-type'] != "application/json") {
-                console.log("error getting build history. wrong type", response.headers['content-type'], build_history, response.request.uri.path);
-                clbk(null);
+                logger("error getting build history. wrong type", response.headers['content-type'], data, response.request.uri.path);
+                clbk( false, null );
                 return;
             }
-            console.log("success getting build history", response.request.uri.path);
-            //console.log("success getting build history", response.request.uri.path, build_history);
-            //console.log("success getting build history", response);
+            
+            logger("success getting build history", response.request.uri.path);
+            //logger("success getting build history", response.request.uri.path, build_history);
+            //logger("success getting build history", response);
 
-            var cache_time = (new Date()).getTime();
-            caches[cache_name][repo_name] = [cache_time, build_history];
-            build_history.cache_time = cache_time;
-
-            clbk(build_history);
+            data.cache_time = (new Date()).getTime();
+            cacher.set(cache_name, cache_key, data, function(err) {
+                if (err) {
+                }
+                clbk( false, data );
+            });
 
             //{ count: 46,
             // next: 'https://hub.docker.com/v2/repositories/sauloal/introgressionbrowser/buildhistory/?page=2',
@@ -193,35 +197,50 @@ function get_build_history(repo_name, no_cache, clbk) {
 
 function get_build_log(repo_name, build_id, no_cache, clbk) {
     var cache_name = 'logs';
+    var cache_key  = repo_name + "_" + build_id;
+    var func       = get_build_log;
     if (!no_cache) {
-        var val = check_cache(repo_name + "_" + build_id, cache_name);
-        if ( val ) {
-            clbk(val);
-            return;
-        }
+        cacher.get(cache_name, cache_key, 
+            function(val) {
+                if ( val ) {
+                    clbk( true, val );
+                    return;
+
+                } else {
+                    func(repo_name, build_id, true, clbk);
+                    return;
+                    
+                }
+            }
+        );
+        return;
     }
 
     request.get({"url": "https://hub.docker.com/v2/repositories/"+repo_name+"/buildhistory/"+build_id+"/", "json": true},
-        function (error, response, build_log) {
+        function (error, response, data) {
             if (error) {
-                console.log("error getting build log", error, build_log);
-                clbk(null);
+                logger("error getting build log", error, data);
+                clbk( false, null );
                 return;
             }
+            
             if (response.headers['content-type'] != "application/json") {
-                console.log("error getting build log. wrong type", response.headers['content-type'], build_log, response.request.uri.path);
-                clbk(null);
+                logger("error getting build log. wrong type", response.headers['content-type'], data, response.request.uri.path);
+                clbk( false, null );
                 return;
             }
-            console.log("success getting build log:", response.request.uri.path);
-            //console.log("success getting build log:", build_log, response.request.uri.path);
-            //console.log("success getting build log:", response.headers);
+            
+            logger("success getting build log:", response.request.uri.path);
+            //logger("success getting build log:", build_log, response.request.uri.path);
+            //logger("success getting build log:", response.headers);
     
-            var cache_time = (new Date()).getTime();
-            caches[cache_name][repo_name + "_" + build_id] = [cache_time, build_log];
-            build_log.cache_time = cache_time;
-    
-            clbk(build_log);
+            data.cache_time = (new Date()).getTime();
+            cacher.set(cache_name, cache_key, data, function(err) {
+                if (err) {
+                }
+                clbk( false, data );
+            });
+            
             //{ id: 1785682,
             //  status: 10,
             //  tag: 65567,
@@ -276,7 +295,7 @@ function get_build_log(repo_name, build_id, no_cache, clbk) {
 
 
 function webhook_callback(callback_url, status) {
-    console.log("calling back webhook");
+    logger("calling back webhook");
 
     var form = {
         "state"      : status ? "success" : "failure",
@@ -285,15 +304,15 @@ function webhook_callback(callback_url, status) {
         "target_url" : "http://google.com"
     };
     
-    console.log("calling back webhook", form);
+    logger("calling back webhook", form);
     
     request.post({"url": callback_url, "form": JSON.stringify(form), "header": { "Content-Type":"application/json; charset=UTF-8" }},
         function(error, response, body){
             if (error) {
-                console.log("error returning to dockerhub webhook", error, response.headers);
+                logger("error returning to dockerhub webhook", error, response.headers);
                 return;
             }
-            console.log("success returning to dockerhub webhook", response.headers, body);
+            logger("success returning to dockerhub webhook", response.headers, body);
             
     });
 }
@@ -304,35 +323,42 @@ function webhook_callback(callback_url, status) {
  * REPOSITORY API
  */
 function _API_init_repo_token(clbk) {
-    console.log("_API_init_repo_token: THIS:", this,  "REPO NAME:", this.repo_name);
+    logger("_API_init_repo_token: THIS:", this,  "REPO NAME:", this.repo_name);
     var api_this = this;
 	request.get({"url": "https://index.docker.io/v1/repositories/"+this.repo_name+"/images", "json": true, "headers": {"X-Docker-Token": true}},
 		function (error, response, images) {
 			if (error) {
-				console.log("error getting endpoint", error);
+				logger("error getting endpoint", error);
 				clbk(null);
+				return;
 			}
-			if (response.headers['content-type'] != "application/json") {
-				console.log("error getting endpoint. wrong type", response.headers['content-type'], body);
-				clbk(null);
-			}
-			console.log("success getting endpoint", response.request.uri.path);
 			
-            console.log("_API_init_repo_token INSIDE: THIS:", api_this,  "REPO NAME:", api_this.repo_name);
+			if (response.headers['content-type'] != "application/json") {
+				logger("error getting endpoint. wrong type", response.headers['content-type'], response);
+				clbk(null);
+				return;
+			}
+			
+			logger("success getting endpoint", response.request.uri.path);
+			
+            logger("_API_init_repo_token INSIDE: THIS:", api_this,  "REPO NAME:", api_this.repo_name);
+			
 			try {
 				var endpoint = response.headers['x-docker-endpoints'];
-				var token    = response.headers['x-docker-token'];
+				var token    = response.headers['x-docker-token'    ];
 
                 api_this.endpoint = endpoint;
                 api_this.token    = token;
                 api_this.header   = {'Authorization': 'Token ' + token};
-				//console.log("success getting endpoint", response.headers);
-				//console.log("success getting endpoint uri", endpoint);
-				//console.log("success getting endpoint token", token);
-			
+				//logger("success getting endpoint", response.headers);
+				//logger("success getting endpoint uri", endpoint);
+				//logger("success getting endpoint token", token);
+			    
 			} catch(e) {
-				console.log("error getting endpoint. no header", response.headers, response.headers['x-docker-endpoints'], response.headers['x-docker-token'], e);
+				logger("error getting endpoint. no header", response.headers, response.headers['x-docker-endpoints'], response.headers['x-docker-token'], e);
 				clbk(null);
+                return;
+                
 			}
             
             api_this.images = images;
@@ -347,15 +373,18 @@ function _API_get_repo_tags(clbk){
     request.get({"url": "https://"+this.endpoint+"/v1/repositories/"+this.repo_name+"/tags", "json": true, "headers": this.header},
         function name(error, response, repo_tags) {
             if (error) {
-                console.log("error getting repo tags", error);
+                logger("error getting repo tags", error);
                 clbk(null);
-            }
-            if (response.headers['content-type'] != "application/json") {
-                console.log("error getting repo tags. wrong type", response.headers['content-type'], repo_tags, response);
-                clbk(null);
+                return;
             }
             
-            console.log("success getting repo tags", response.request.uri.path, repo_tags);
+            if (response.headers['content-type'] != "application/json") {
+                logger("error getting repo tags. wrong type", response.headers['content-type'], repo_tags, response);
+                clbk(null);
+                return;
+            }
+            
+            logger("success getting repo tags", response.request.uri.path, repo_tags);
             
             clbk(repo_tags);
         }
@@ -367,15 +396,19 @@ function _API_get_repo_tag_img_id(tag_name, clbk) {
     request.get({"url": "https://"+this.endpoint+"/v1/repositories/"+this.repo_name+"/tags/"+tag_name, "json": true, "headers": this.header},
         function name(error, response, img_id) {
             if (error) {
-                console.log("error getting build tag img id", error);
+                logger("error getting build tag img id", error);
                 clbk(null);
+                return;
             }
+            
             if (response.headers['content-type'] != "application/json") {
-                console.log("error getting build tag img id. wrong type", response.headers['content-type'], img_id, response);
+                logger("error getting build tag img id. wrong type", response.headers['content-type'], img_id, response);
                 clbk(null);
+                return;
             }
-            console.log("success getting build tag img id", response.request.uri.path, img_id);
-            clbk(img_id)
+            
+            logger("success getting build tag img id", response.request.uri.path, img_id);
+            clbk(img_id);
         }
     );
 }
@@ -388,15 +421,20 @@ function _API_get_image_ancestry(img_id, clbk) {
     request.get({"url": "https://"+this.endpoint+"/v1/images/"+img_id+"/ancestry", "json": true, "headers": this.header},
         function name(error, response, img_ancestry) {
             if (error) {
-                console.log("error getting build latest ancestry", error, img_ancestry);
+                logger("error getting build latest ancestry", error, img_ancestry);
                 clbk(null);
+                return;
             }
+            
             if (response.headers['content-type'] != "application/json") {
-                console.log("error getting build latest ancestry. wrong type", response.headers['content-type'], img_ancestry, response.request.uri.path);
+                logger("error getting build latest ancestry. wrong type", response.headers['content-type'], img_ancestry, response.request.uri.path);
                 clbk(null);
+                return;
             }
-            console.log("success getting build latest ancestry", img_ancestry);
+            
+            logger("success getting build latest ancestry", img_ancestry);
             clbk(img_ancestry);
+            return;
         }
     );
 }
@@ -405,14 +443,18 @@ function _API_get_image_json(img_id, clbk) {
     request.get({"url": "https://"+this.endpoint+"/v1/images/"+img_id+"/json", "json": true, "headers": this.header},
         function name(error, response, img_json) {
             if (error) {
-                console.log("error getting image json", error, img_json);
+                logger("error getting image json", error, img_json);
                 clbk(null);
+                return;
             }
+            
             if (response.headers['content-type'] != "application/json") {
-                console.log("error getting image json. wrong type", response.headers['content-type'], img_json, response.request.uri.path);
+                logger("error getting image json. wrong type", response.headers['content-type'], img_json, response.request.uri.path);
                 clbk(null);
+                return;
             }
-            console.log("success getting image json", response.request.uri.path, img_json);
+            
+            logger("success getting image json", response.request.uri.path, img_json);
             clbk(img_json);
         }
     );
@@ -449,10 +491,11 @@ API.prototype = {
     _init_repo_token   : _API_init_repo_token
 };
 
+
 exports.get_repos         = get_repos;
 exports.get_repo_info     = get_repo_info;
 exports.get_build_history = get_build_history;
 exports.get_build_log     = get_build_log;
-exports.clean_cache       = clean_cache;
+exports.cacher            = cacher;
 exports.webhook_callback  = webhook_callback;
 exports.API               = API;

@@ -24,9 +24,13 @@ session_counter.js:
 
 ## Enviroment variables
 ```
-var ip            = process.env.IP            || "0.0.0.0";
-var port          = process.env.PORT          || 8080;
-var CACHE_TIMEOUT = process.env.CACHE_TIMEOUT || 600;
+var ip                    = process.env.IP                    || "0.0.0.0";
+var port                  = process.env.PORT                  || 8080;
+var DOCKERHUB_URL         = process.env.DOCKERHUB_URL         || 'https://hub.docker.com/';
+var DEBUG                 = process.env.DEBUG                 || false;
+var CACHE_TIMEOUT_MINUTES = process.env.CACHE_TIMEOUT_MINUTES || 1440;
+var ALLOWED_REPOS         = process.env.ALLOWED_REPOS         || "biodckr,sauloal";
+var FORBIDDEN_REPOS       = process.env.FORBIDDEN_REPOS       || "";
 ```
 
 ## Endpoints
@@ -35,10 +39,11 @@ var CACHE_TIMEOUT = process.env.CACHE_TIMEOUT || 600;
  - ```/history/:username/:reponame/           - Repository building history```
  - ```/logs/:username/:reponame/:build_code/  - Build logs```
  - ```/usage/                                 - Server statistics```
+ - ```/xml/:username/'                        - Get HTML table```
+ - ```/html/:username/'                       - Get full HTML```
 
 ## DockerHub Endpoints used
  - ```https://hub.docker.com/v2/repositories/<username>/```
  - ```https://hub.docker.com/v2/repositories/<username>/<repository>/```
  - ```https://hub.docker.com/v2/repositories/<username>/<repository>/buildhistory/```
  - ```https://hub.docker.com/v2/repositories/<username>/<repository>/buildhistory/<build id>/```
-

@@ -1,99 +1,92 @@
-var ip                 = process.env.IP   || process.env.OPENSHIFT_NODEJS_IP   || "0.0.0.0";
-var port               = process.env.PORT || process.env.OPENSHIFT_NODEJS_PORT || 8080;
+var ip                    = process.env.IP              || process.env.OPENSHIFT_NODEJS_IP   || "0.0.0.0";
+var port                  = process.env.PORT            || process.env.OPENSHIFT_NODEJS_PORT || 8080;
+var DOCKERHUB_URL         = process.env.DOCKERHUB_URL   || 'https://hub.docker.com/';
+var GIT_URL               = process.env.GIT_URL         || 'https://github.com/';
+var DEBUG                 = process.env.DEBUG           || false;
+var ALLOWED_REPOS         = process.env.ALLOWED_REPOS   || "biodckr,sauloal";
+var FORBIDDEN_REPOS       = process.env.FORBIDDEN_REPOS || "";
+//var DEBUG                 = process.env.DEBUG         || true;
+console.log('DEBUG', DEBUG);
 
 
-var application_root = __dirname,
-    bodyParser       = require( 'body-parser'     ),
-	compression      = require( 'compression'     ),
-	errorHandler     = require( 'errorhandler'    ),
-    express          = require( 'express'         ),   //Web framework
-	methodOverride   = require( 'method-override' ),
-	//path             = require( 'path'            ),
-    request          = require( 'request'         ),
-    serveStatic      = require( 'serve-static'    ),
-	serveFavicon     = require( 'serve-favicon'   );
+var application_root      = __dirname,
+    express               = require( 'express'         ),   //Web framework
+    request               = require( 'request'         )    //Web request
+	;
+
+var expresser             = require( './expresser.js'       );
+var getters               = require( './getters.js'         );
+var logger                = require( './logger.js'          );
+var sessionCounter        = require( './session_counter.js' );
+var swigger               = require( './swigger.js'         );
+
+var app                   = express();
 
 
-var getters          = require( './getters.js'    );
-var sessionCounter   = require( './session_counter.js' );
+ALLOWED_REPOS             = ALLOWED_REPOS.split(',');
+FORBIDDEN_REPOS           = FORBIDDEN_REPOS.split(',');
 
+if ( ALLOWED_REPOS[0]   == "" ) { ALLOWED_REPOS   = [] }
+if ( FORBIDDEN_REPOS[0] == "" ) { FORBIDDEN_REPOS = [] }
 
-var app = express();
-
-app.conf = {};
+app.conf                  = {};
 app.conf.application_root = application_root;
 app.conf.port             = port;
 app.conf.ip               = ip;
+app.conf.DOCKERHUB_URL    = DOCKERHUB_URL;
+app.conf.GIT_URL          = GIT_URL;
+app.conf.DEBUG            = DEBUG;
+app.conf.ALLOWED_REPOS    = ALLOWED_REPOS;
+app.conf.FORBIDDEN_REPOS  = FORBIDDEN_REPOS;
+app.conf.HAS_FILTER       = ( ALLOWED_REPOS.length > 0 || FORBIDDEN_REPOS.length > 0 );
 
-app.mods = {}
+console.log('ALLOWED_REPOS  ', app.conf.ALLOWED_REPOS  , app.conf.ALLOWED_REPOS.length   );
+console.log('FORBIDDEN_REPOS', app.conf.FORBIDDEN_REPOS, app.conf.FORBIDDEN_REPOS.length );
+console.log('HAS_FILTER     ', app.conf.HAS_FILTER                                       );
+
+app.mods                  = {};
 app.mods.console          = console;
-app.mods.bodyParser       = bodyParser;
-app.mods.compression      = compression;
-app.mods.errorHandler     = errorHandler;
 app.mods.express          = express;
-app.mods.request          = request,
-app.mods.serveStatic      = serveStatic,
-app.mods.serveFavicon     = serveFavicon;
+app.mods.request          = request;
+
+app.mods.expresser        = expresser;
+app.mods.getters          = getters;
+app.mods.logger           = logger;
+app.mods.sessionCounter   = sessionCounter;
+app.mods.swigger          = swigger;
 
 
 
 
-console.log( 'application_root: ', application_root );
+console.warn( 'application_root: ', application_root );
 
 
-//http://stackoverflow.com/questions/25550819/error-most-middleware-like-bodyparser-is-no-longer-bundled-with-express
-// parse application/json
-app.use( bodyParser.json() );
+sessionCounter.init(app); //Cookies and user count
+swigger.init(app);        //Swig
+expresser.init(app);      //Express
 
 
-// parse application/x-www-form-urlencoded
-app.use( bodyParser.urlencoded({ extended: true, uploadDir: app.tempPath }) );
-
-
-//checks request.body for HTTP method overrides
-app.use( methodOverride('X-HTTP-Method-Override') );
-
-
-//allow data compression
-app.use( compression() );
-
-
-//Show all errors in development
-app.use( errorHandler({ dumpExceptions: true, showStack: true }));
-
-
-//Add etag
-var checksum         = require( 'checksum'        );
-app.set('etag', function (body, encoding) {
-  return checksum(body); // consider the function is defined
-})
-
-
-//Cookies and user count
-sessionCounter.init(app);
-
-
-//Serve static pages
-app.use(express.static('static', {etag: true}));
+//Add app to all requests
+function add_app(req, res, next) {
+    req.app = app;
+    next();
+}
+app.use(add_app);
 
 
 
-
-
-//console.log('views path', path.join(application_root, 'views'));
-
-//app.get(    '/'                                      , function (req,res) { res.redirect('/static/'); } );
-
+//Set routes 
 app.get(    '/repos/:username/'                      , getters.get_repos        );
 app.get(    '/info/:username/:reponame/'             , getters.get_repo_info    );
 app.get(    '/history/:username/:reponame/'          , getters.get_repo_history );
 app.get(    '/logs/:username/:reponame/:build_code/' , getters.get_build_log    );
-app.get(    '/update/'                               , getters.update           );
-
+app.get(    '/xml/:username/'                        , getters.dynamic_xml      );
+app.get(    '/html/:username/'                       , getters.dynamic_html     );
+//app.get(    '/update/'                               , getters.update           );
 
 exports.app      = app;
 
 app.listen( port, ip, function() {
-    console.log( 'Express server listening on http://%s:%s', ip, port);
+    console.warn( 'Express server listening on http://%s:%s', ip, port );
 });
 

@@ -8,25 +8,21 @@
   "single-instance": true,
   "scripts": {"start": "nodemon index.js"},
   "license": "MIT",
-  "engines": {
-    "node": ">= 0.6.0",
-    "npm": ">= 1.0.0"
-  },
   "dependencies": {
     "body-parser": "*",
     "cookie-parser": "*",
     "cookie-session": "*",
-    "compression": "*",
-    "checksum": "*",
+	  "compression": "*",
+	  "checksum": "*",
     "debug": "*",
     "errorhandler": "*",
     "express": "*",
     "method-override": "*",
-    "nodemon": "*",
     "node-persist": "*",
     "request": "*",
     "time": "*",
     "serve-favicon": "*",
-    "serve-static": "*"
+    "serve-static": "*",
+    "swig": "*"
   }
 }
