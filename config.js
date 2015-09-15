@@ -37,7 +37,7 @@ function init(app) {
             loggin        : true,
         },
         secret        : 'ILuvCookies',
-        session_name  : 'dockerhubuibiodocker',
+        session_name  : 'status-biodocker.rhcloud.com',
         trust_proxy   : 1
     };
     app.conf.cache            = {
