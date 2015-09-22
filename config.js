@@ -28,7 +28,7 @@ function init(app) {
     app.conf.swig             = {
         template_folder: path.join( app.conf.APPLICATION_ROOT, 'templates' ),
         view_cache     : true,
-        cache          : true
+        cache          : "memory"
     };
     app.conf.session_counter  = {
         default       : {
