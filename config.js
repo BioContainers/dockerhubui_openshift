@@ -27,14 +27,14 @@ function init(app) {
     app.conf.APPLICATION_ROOT = __dirname;
     app.conf.swig             = {
         template_folder: path.join( app.conf.APPLICATION_ROOT, 'templates' ),
-        view_cache     : false,
-        cache          : false
+        view_cache     : true,
+        cache          : true
     };
     app.conf.session_counter  = {
         default       : {
             dir           : path.join( app.conf.DATA_DIR, 'sessions' ),
             ttl           : false, 
-            loggin        : true,
+            loggin        : false,
         },
         secret        : 'ILuvCookies',
         session_name  : 'status-biodocker.rhcloud.com',
