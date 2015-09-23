@@ -2,7 +2,7 @@ var CONTAINER     = "mainContent";
 var HOVER         = "hoverer";
 var DOCKERHUB_URL = 'https://hub.docker.com/';
 var GIT_URL       = 'https://github.com/';
-var DOCKER_DATA   = { "biodckr": {} }; // default username to show
+var DOCKER_DATA   = { "biodckr": {}, "biodckrdev": {}, }; // default username to show
 var DEBUG         = false;
 //var DEBUG         = true;
 
